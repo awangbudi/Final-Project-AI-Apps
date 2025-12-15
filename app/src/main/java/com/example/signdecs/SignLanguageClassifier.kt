@@ -19,12 +19,12 @@ data class ClassificationResult(
 
 object SignLanguageClassifier {
 
-    private const val MODEL_PATH = "hand_sign_model.tflite"
+    private const val MODEL_PATH = "revised_hand_sign_model.tflite"
     private const val LABELS_PATH = "labels.txt"
     private const val BATCH_SIZE = 1
     private const val INPUT_SIZE = 21 * 2 // 21 landmarks, each with x and y coordinates
     private const val BYTES_PER_FLOAT = 4
-    private const val NUM_CLASSES = 36 // Assuming 26 letters + 10 digits
+    private const val NUM_CLASSES = 27
 
     private var interpreter: Interpreter? = null
     private var labels: List<String>? = null

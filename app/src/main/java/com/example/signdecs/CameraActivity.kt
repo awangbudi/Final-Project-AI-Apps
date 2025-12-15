@@ -24,13 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner // Correct import
 import com.example.signdecs.ui.theme.SigndecsTheme
 import com.google.mediapipe.tasks.vision.core.RunningMode
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class CameraActivity : ComponentActivity() {
@@ -50,6 +51,7 @@ class CameraActivity : ComponentActivity() {
 }
 
 @SuppressLint("UnsafeOptInUsageError")
+@Suppress("DEPRECATION") // Suppress deprecation for setTargetResolution
 @Composable
 fun CameraScreen() {
     val context = LocalContext.current
@@ -57,13 +59,13 @@ fun CameraScreen() {
     var classificationResult by remember { mutableStateOf("No sign detected") }
     var typedText by remember { mutableStateOf("") }
     var lastAppendedSign by remember { mutableStateOf<String?>(null) }
-    var lastTypedTimestamp by remember { mutableStateOf(0L) } // Waktu terakhir huruf diketik
-    val typingCooldownMs = 1000L // Jeda 1 detik antar pengetikan
+    var lastTypedTimestamp by remember { mutableLongStateOf(0L) } // Use mutableLongStateOf
+    val typingCooldownMs = 1000L
     
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var cameraSelector by remember { mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA) }
 
-    val minConfidence = 95.0 // Set confidence threshold to 95% as requested
+    val minConfidence = 95.0
 
     val handLandmarkerHelper = remember {
         HandLandmarkerHelper(
@@ -82,29 +84,32 @@ fun CameraScreen() {
                     resultBundle?.let {
                         if (it.results.isNotEmpty() && it.results[0].landmarks().isNotEmpty()) {
                             val landmarks = it.results[0].landmarks()[0]
-                            val classification = SignLanguageClassifier.classify(landmarks) // Returns ClassificationResult?
+                            val classification = SignLanguageClassifier.classify(landmarks)
 
-                            // Update UI text for display
                             classificationResult = if (classification != null) {
-                                "${classification.sign} (${String.format("%.2f", classification.confidence)}%)"
+                                // Use Locale.US for consistent number formatting
+                                "${classification.sign} (${String.format(Locale.US, "%.2f", classification.confidence)}%)"
                             } else {
                                 "No sign detected"
                             }
 
-                            // Typing logic with confidence and debouncing
                             if (classification != null) {
                                 val currentTime = System.currentTimeMillis()
-                                if (classification.confidence >= minConfidence && // Kepercayaan harus tinggi
-                                    classification.sign != lastAppendedSign && // Huruf harus berbeda dari yang terakhir diketik
-                                    (currentTime - lastTypedTimestamp) > typingCooldownMs // Sudah melewati jeda waktu
+                                if (
+                                    classification.confidence >= minConfidence &&
+                                    classification.sign != lastAppendedSign &&
+                                    (currentTime - lastTypedTimestamp) > typingCooldownMs
                                 ) {
-                                    typedText += classification.sign
+                                    val charToAppend = if (classification.sign.trim().equals("Space", ignoreCase = true)) {
+                                        " "
+                                    } else {
+                                        classification.sign
+                                    }
+                                    typedText += charToAppend
                                     lastAppendedSign = classification.sign
-                                    lastTypedTimestamp = currentTime // Update timestamp terakhir diketik
+                                    lastTypedTimestamp = currentTime
                                 }
                             } else {
-                                // Jika tidak ada tangan terdeteksi, reset lastAppendedSign.
-                                // Ini penting agar huruf yang sama bisa diketik lagi setelah jeda.
                                 lastAppendedSign = null
                             }
                         } else {
@@ -233,7 +238,7 @@ fun CameraScreen() {
                     IconButton(onClick = {
                         typedText = ""
                         lastAppendedSign = null
-                        lastTypedTimestamp = 0L // Reset timestamp juga
+                        lastTypedTimestamp = 0L
                     }) {
                         Icon(
                             imageVector = Icons.Default.Clear,
