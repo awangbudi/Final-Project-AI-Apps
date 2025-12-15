@@ -6,6 +6,7 @@ import android.graphics.Matrix
 import android.os.Bundle
 import android.util.Log
 import android.util.Size
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.camera.core.CameraSelector
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,8 +30,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner // Correct import
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.signdecs.ui.theme.SigndecsTheme
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -51,7 +55,7 @@ class CameraActivity : ComponentActivity() {
 }
 
 @SuppressLint("UnsafeOptInUsageError")
-@Suppress("DEPRECATION") // Suppress deprecation for setTargetResolution
+@Suppress("DEPRECATION")
 @Composable
 fun CameraScreen() {
     val context = LocalContext.current
@@ -59,13 +63,15 @@ fun CameraScreen() {
     var classificationResult by remember { mutableStateOf("No sign detected") }
     var typedText by remember { mutableStateOf("") }
     var lastAppendedSign by remember { mutableStateOf<String?>(null) }
-    var lastTypedTimestamp by remember { mutableLongStateOf(0L) } // Use mutableLongStateOf
+    var lastTypedTimestamp by remember { mutableLongStateOf(0L) }
     val typingCooldownMs = 1000L
     
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var cameraSelector by remember { mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA) }
 
     val minConfidence = 95.0
+
+    val database = Firebase.database.reference
 
     val handLandmarkerHelper = remember {
         HandLandmarkerHelper(
@@ -87,7 +93,6 @@ fun CameraScreen() {
                             val classification = SignLanguageClassifier.classify(landmarks)
 
                             classificationResult = if (classification != null) {
-                                // Use Locale.US for consistent number formatting
                                 "${classification.sign} (${String.format(Locale.US, "%.2f", classification.confidence)}%)"
                             } else {
                                 "No sign detected"
@@ -190,22 +195,54 @@ fun CameraScreen() {
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Right: Camera Switch Button
-            IconButton(
-                onClick = {
-                    cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
-                        CameraSelector.DEFAULT_BACK_CAMERA
-                    } else {
-                        CameraSelector.DEFAULT_FRONT_CAMERA
-                    }
-                },
-                modifier = Modifier.align(Alignment.End)
+            // Top buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.Default.Cameraswitch,
-                    contentDescription = "Switch Camera",
-                    tint = Color.White
-                )
+                // Top Left: Upload Button
+                IconButton(
+                    onClick = {
+                        if (typedText.isNotBlank()) {
+                            val entry = mapOf(
+                                "text" to typedText,
+                                "timestamp" to System.currentTimeMillis()
+                            )
+                            database.child("detections").push().setValue(entry)
+                                .addOnSuccessListener {
+                                    Toast.makeText(context, "Teks berhasil diunggah!", Toast.LENGTH_SHORT).show()
+                                }
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Gagal mengunggah: ${it.message}", Toast.LENGTH_SHORT).show()
+                                }
+                        } else {
+                            Toast.makeText(context, "Tidak ada teks untuk diunggah", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Upload,
+                        contentDescription = "Upload Text",
+                        tint = Color.White
+                    )
+                }
+
+                // Top Right: Camera Switch Button
+                IconButton(
+                    onClick = {
+                        cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                            CameraSelector.DEFAULT_BACK_CAMERA
+                        } else {
+                            CameraSelector.DEFAULT_FRONT_CAMERA
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cameraswitch,
+                        contentDescription = "Switch Camera",
+                        tint = Color.White
+                    )
+                }
             }
 
             // Bottom: Detection and Typing UI
