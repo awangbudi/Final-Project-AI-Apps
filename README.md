@@ -43,6 +43,61 @@ graph TD
     L --> M;
 ```
 
+#### Detail Alur Data & Komponen Penanggung Jawab
+Berikut adalah rincian langkah demi langkah tentang bagaimana data bergerak melalui aplikasi dan komponen mana yang bertanggung jawab pada setiap tahap.
+
+1.  **Pengambilan Gambar dari Kamera**
+    *   **Sumber**: Sensor Kamera Perangkat.
+    *   **Komponen**: `CameraActivity.kt`
+    *   **Fungsi Kunci**: `ImageAnalysis.Builder()` (dari library CameraX) yang diatur di dalam `LaunchedEffect` pada Composable `CameraScreen`.
+    *   **Output**: `ImageProxy` (representasi frame gambar mentah per satuan waktu).
+
+2.  **Pra-pemrosesan Gambar**
+    *   **Sumber**: `ImageProxy`.
+    *   **Komponen**: `CameraActivity.kt`.
+    *   **Fungsi Kunci**: Lambda di dalam `analyzer.setAnalyzer { ... }`.
+    *   **Proses**: Memanggil `imageProxy.toBitmap()` dan melakukan rotasi/mirroring menggunakan objek `Matrix`.
+    *   **Output**: `Bitmap` (gambar yang siap dianalisis).
+
+3.  **Deteksi Landmark Tangan**
+    *   **Sumber**: `Bitmap`.
+    *   **Komponen**: `HandLandmarkerHelper.kt`.
+    *   **Fungsi Kunci**: `detectLiveStream(bitmap)`. Di dalamnya, `handLandmarker.detectAsync()` dipanggil untuk menjalankan model MediaPipe.
+    *   **Output**: Hasil deteksi 21 titik *landmark* tangan (dikirim secara asinkron).
+
+4.  **Pengiriman Hasil Landmark ke UI**
+    *   **Sumber**: Hasil dari `handLandmarker.detectAsync()`.
+    *   **Komponen**: `HandLandmarkerHelper.kt` dan `CameraActivity.kt`.
+    *   **Fungsi Kunci**: Hasil deteksi dikirim melalui *interface callback* `handLandmarkerResultsListener.onResults(...)`. `CameraActivity` bertindak sebagai "pendengar" dari hasil ini.
+    *   **Output**: `HandLandmarkerHelper.ResultBundle` yang berisi data landmark.
+
+5.  **Klasifikasi Isyarat menjadi Huruf**
+    *   **Sumber**: Data 21 titik landmark dari `ResultBundle`.
+    *   **Komponen**: `SignLanguageClassifier.kt`.
+    *   **Fungsi Kunci**: `classify(landmarks)`. Fungsi ini dipanggil dari dalam `handLandmarkerResultsListener` di `CameraActivity.kt`.
+    *   **Proses**: Mengubah 21 *landmark* menjadi 42 nilai *float*, dimasukkan ke `ByteBuffer`, dan dieksekusi oleh *interpreter* TensorFlow Lite.
+    *   **Output**: Objek data `ClassificationResult` (berisi `sign` dan `confidence`).
+
+6.  **Penerapan Logika Cerdas & Pengetikan**
+    *   **Sumber**: Objek `ClassificationResult`.
+    *   **Komponen**: `CameraActivity.kt`.
+    *   **Fungsi Kunci**: Blok logika `if` di dalam `handLandmarkerResultsListener`.
+    *   **Proses**: Memeriksa tiga kondisi: `confidence > 95%`, isyarat bukan duplikat, dan jeda waktu > 1 detik terpenuhi.
+    *   **Output**: Pembaruan pada *state variable* `typedText`.
+
+7.  **Pembaruan Tampilan (UI)**
+    *   **Sumber**: Perubahan pada *state variable* `typedText` dan `classificationResult`.
+    *   **Komponen**: Jetpack Compose.
+    *   **Fungsi Kunci**: Composable `Text(text = typedText)` dan `Text(text = classificationResult)`.
+    *   **Proses**: Jetpack Compose secara otomatis mendeteksi perubahan pada *state* dan melakukan *recomposition* (me-render ulang) hanya pada komponen `Text` yang relevan, sehingga tampilan di layar pengguna ter-update.
+
+8.  **Pengunggahan ke Firebase**
+    *   **Sumber**: *State variable* `typedText`.
+    *   **Komponen**: `CameraActivity.kt`.
+    *   **Fungsi Kunci**: Blok `onClick` pada `IconButton` "Upload".
+    *   **Proses**: Memanggil `database.child("detections").push().setValue(...)` untuk mengirim data ke server.
+    *   **Output**: Data tersimpan di Firebase Realtime Database.
+
 ---
 
 ## Siklus Hidup (Lifecycle) & Manajemen State di Jetpack Compose
