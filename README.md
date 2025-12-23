@@ -24,33 +24,23 @@ Diagram ini menggambarkan bagaimana data gambar dari kamera diolah hingga menjad
 
 ```mermaid
 graph TD
-    subgraph "Perangkat Android (Aplikasi JariBicara)"
-        direction LR
-
-        subgraph "Lapisan Tampilan (View Layer)"
-            UI_Main[MainActivity (UI Utama)] --Mulai--> UI_Cam[CameraActivity (UI Kamera)];
-        end
-
-        subgraph "Lapisan Logika & Deteksi (Logic & Detection Layer)"
-            UI_Cam --Menggunakan--> CamX[CameraX];
-            CamX --Image Stream--> HLH[HandLandmarkerHelper];
-            HLH --21 Titik Tangan--> SLC[SignLanguageClassifier];
-            SLC --Hasil Klasifikasi--> UI_Cam;
-        end
-        
-        UI_Cam --Tombol Upload--> FB_Logic[Logika Upload];
-
-    end
-
-    subgraph "Layanan Cloud"
-        FB_DB[(Firebase Realtime DB)];
-    end
-
-    FB_Logic --Kirim Data (Teks & Timestamp)--> FB_DB;
+    A[Pengguna Buka Aplikasi] --> B[UI Utama - MainActivity];
+    B --Tekan 'Mulai Deteksi'--> C{Minta Izin Kamera};
+    C --Ditolak--> D[Tampilkan Peringatan];
+    C --Diberikan--> E[UI Kamera - CameraActivity];
+    E --Mengaktifkan--> F(CameraX);
+    F --Aliran Gambar--> G(HandLandmarkerHelper);
+    G --21 Titik Tangan--> H(SignLanguageClassifier);
+    H --Hasil Klasifikasi (Huruf + Kepercayaan)--> I{Logika Cerdas di UI Kamera};
+    I --Setiap Deteksi--> J[Tampil di Bar Deteksi Atas];
+    I --Lolos Filter (95% & Jeda 1s)--> K[Ditambahkan ke Bar Pengetikan];
+    E --Tekan Tombol Upload--> L{Kirim Data ke Firebase};
     
-    style FB_DB fill:#ffa,stroke:#f60,stroke-width:2px
-    style UI_Main fill:#dcf,stroke:#609,stroke-width:2px
-    style UI_Cam fill:#dcf,stroke:#609,stroke-width:2px
+    subgraph "Layanan Cloud"
+      M[(Firebase Realtime DB)];
+    end
+
+    L --> M;
 ```
 
 ---
